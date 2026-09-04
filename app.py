@@ -18,6 +18,7 @@ from flask import Flask, render_template, request, jsonify
 from tensorflow.keras.models import load_model
 from tensorflow.keras.applications.efficientnet import preprocess_input
 
+import gc
 from PIL import Image
 import numpy as np
 
@@ -38,6 +39,18 @@ app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
+TFLITE_PATH = os.path.join(
+    BASE_DIR,
+    "model",
+    "model.tflite"
+)
+
+if not os.path.exists(TFLITE_PATH):
+    TFLITE_PATH = os.path.join(
+        BASE_DIR,
+        "model.tflite"
+    )
+
 MODEL_PATH = os.path.join(
     BASE_DIR,
     "model",
@@ -54,33 +67,46 @@ IMAGE_SIZE = (224, 224)
 
 
 # ============================================================
-# LOAD MODEL
+# LOAD MODEL (TFLite for lightweight RAM or Keras fallback)
 # ============================================================
 
 print("=" * 60)
 print("CHEST X-RAY PNEUMONIA DETECTION")
 print("=" * 60)
 
-print("Model path:")
-print(MODEL_PATH)
+tflite_interpreter = None
+tflite_input_idx = None
+tflite_output_idx = None
+model = None
 
-if not os.path.exists(MODEL_PATH):
+if os.path.exists(TFLITE_PATH):
+    print("Loading optimized TFLite model:")
+    print(TFLITE_PATH)
+    tflite_interpreter = tf.lite.Interpreter(model_path=TFLITE_PATH)
+    tflite_interpreter.allocate_tensors()
+    tflite_input_idx = tflite_interpreter.get_input_details()[0]["index"]
+    tflite_output_idx = tflite_interpreter.get_output_details()[0]["index"]
+    print("TFLite model loaded successfully! (RAM: ~50MB)")
+elif os.path.exists(MODEL_PATH):
+    print("Loading EfficientNetB0 Keras model:")
+    print(MODEL_PATH)
+    model = load_model(MODEL_PATH)
+    print("Model loaded successfully!")
+else:
     raise FileNotFoundError(
-        f"Model file not found: {MODEL_PATH}"
+        f"Neither TFLite ({TFLITE_PATH}) nor Keras ({MODEL_PATH}) model was found!"
     )
-
-print("Loading EfficientNetB0 model...")
-
-model = load_model(MODEL_PATH)
-
-print("Model loaded successfully!")
 
 # Warm up model during boot to prevent first-request latency
 try:
     print("Warming up model...")
     dummy_input = np.zeros((1, 224, 224, 3), dtype=np.float32)
     dummy_input = preprocess_input(dummy_input)
-    model(dummy_input, training=False)
+    if tflite_interpreter is not None:
+        tflite_interpreter.set_tensor(tflite_input_idx, dummy_input)
+        tflite_interpreter.invoke()
+    else:
+        model(dummy_input, training=False)
     print("Model warmup complete!")
 except Exception as e:
     print("Warmup notice:", e)
@@ -177,7 +203,7 @@ def predict():
 
 
         # ----------------------------------------------------
-        # Open image using PIL
+        # Open image using PIL with memory-safe drafting
         # ----------------------------------------------------
 
         print("Opening image...")
@@ -187,89 +213,49 @@ def predict():
 
         image = Image.open(file.stream)
 
-
-        # ----------------------------------------------------
-        # Convert to RGB
-        # ----------------------------------------------------
+        # Optimize memory during JPEG decode of high-resolution images
+        if hasattr(image, "draft"):
+            try:
+                image.draft("RGB", IMAGE_SIZE)
+            except Exception:
+                pass
 
         image = image.convert("RGB")
-
-
-        print(
-            "Original image size:",
-            image.size
-        )
-
-
-        # ----------------------------------------------------
-        # Resize
-        # ----------------------------------------------------
-
-        image = image.resize(
-            IMAGE_SIZE
-        )
-
-
-        print(
-            "Resized image:",
-            image.size
-        )
-
-
-        # ----------------------------------------------------
-        # Convert to NumPy
-        # ----------------------------------------------------
+        image = image.resize(IMAGE_SIZE, Image.Resampling.BILINEAR)
 
         image_array = np.asarray(
             image,
             dtype=np.float32
         )
 
-
-        print(
-            "Array shape before batch:",
-            image_array.shape
-        )
-
-
-        # ----------------------------------------------------
-        # Add batch dimension
-        # ----------------------------------------------------
-
         image_array = np.expand_dims(
             image_array,
             axis=0
         )
 
-
-        print(
-            "Array shape after batch:",
-            image_array.shape
-        )
-
-
         # ----------------------------------------------------
-        # IMPORTANT:
-        #
-        # SAME EfficientNetB0 preprocessing used
-        # during training
+        # EfficientNetB0 Preprocessing
         # ----------------------------------------------------
 
         image_array = preprocess_input(
             image_array
         )
 
-
         # ----------------------------------------------------
-        # Prediction (Fast direct call without predict tracing)
+        # Prediction (Fast & memory-efficient)
         # ----------------------------------------------------
 
         print("Running model prediction...")
 
-        prediction = model(
-            image_array,
-            training=False
-        ).numpy()
+        if tflite_interpreter is not None:
+            tflite_interpreter.set_tensor(tflite_input_idx, image_array)
+            tflite_interpreter.invoke()
+            prediction = tflite_interpreter.get_tensor(tflite_output_idx)
+        else:
+            prediction = model(
+                image_array,
+                training=False
+            ).numpy()
 
 
         print(
@@ -408,6 +394,9 @@ def predict():
         return jsonify({
             "error": str(e)
         }), 500
+
+    finally:
+        gc.collect()
 
 
 # ============================================================
