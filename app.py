@@ -1,10 +1,25 @@
+import os
+
+# Optimize TensorFlow for cloud containers (prevents CPU thread thrashing and memory bloat)
+os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["TF_NUM_INTRAOP_THREADS"] = "1"
+os.environ["TF_NUM_INTEROP_THREADS"] = "1"
+
+import tensorflow as tf
+
+# Disable XLA compilation (XLA compilation takes 90s+ on shared cloud CPUs, causing worker timeouts)
+tf.config.optimizer.set_jit(False)
+tf.config.threading.set_inter_op_parallelism_threads(1)
+tf.config.threading.set_intra_op_parallelism_threads(1)
+
 from flask import Flask, render_template, request, jsonify
 from tensorflow.keras.models import load_model
 from tensorflow.keras.applications.efficientnet import preprocess_input
 
 from PIL import Image
 import numpy as np
-import os
 
 
 # ============================================================
@@ -60,12 +75,12 @@ model = load_model(MODEL_PATH)
 
 print("Model loaded successfully!")
 
-# Warm up model to pre-compile graph during boot, preventing request timeouts
+# Warm up model during boot to prevent first-request latency
 try:
-    print("Warming up model graph...")
+    print("Warming up model...")
     dummy_input = np.zeros((1, 224, 224, 3), dtype=np.float32)
     dummy_input = preprocess_input(dummy_input)
-    model.predict(dummy_input, verbose=0)
+    model(dummy_input, training=False)
     print("Model warmup complete!")
 except Exception as e:
     print("Warmup notice:", e)
@@ -246,15 +261,15 @@ def predict():
 
 
         # ----------------------------------------------------
-        # Prediction
+        # Prediction (Fast direct call without predict tracing)
         # ----------------------------------------------------
 
         print("Running model prediction...")
 
-        prediction = model.predict(
+        prediction = model(
             image_array,
-            verbose=0
-        )
+            training=False
+        ).numpy()
 
 
         print(
