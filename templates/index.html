@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="AI-powered chest X-ray pneumonia detection using EfficientNetB0">
+    <title>Chest X-ray Pneumonia Detection</title>
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+
+<body>
+
+    <!-- ================= NAVBAR ================= -->
+    <header class="navbar">
+        <div class="nav-container">
+            <div class="brand">
+                <div class="brand-icon">✚</div>
+                <div>
+                    <h2>Chest X-ray AI</h2>
+                    <span>EfficientNetB0</span>
+                </div>
+            </div>
+
+            <nav id="navMenu">
+                <a href="#home">Home</a>
+                <a href="#how-it-works">How It Works</a>
+                <a href="#model">Model</a>
+                <a href="#performance">Performance</a>
+            </nav>
+
+            <button class="menu-btn" onclick="toggleMenu()">☰</button>
+        </div>
+    </header>
+
+
+    <!-- ================= HERO ================= -->
+    <section class="hero" id="home">
+        <div class="hero-container">
+
+            <div class="hero-content">
+                <div class="badge">
+                    <span></span>
+                    AI-Powered Medical Image Analysis
+                </div>
+
+                <h1>
+                    Chest X-ray
+                    <strong>Pneumonia Detection</strong>
+                </h1>
+
+                <p>
+                    Analyze chest X-ray images using a deep learning model
+                    based on EfficientNetB0 and transfer learning.
+                </p>
+
+                <button class="primary-btn" onclick="scrollToUpload()">
+                    Analyze X-ray
+                    <span>→</span>
+                </button>
+            </div>
+
+            <div class="hero-visual">
+                <div class="xray-card">
+                    <div class="scan-line"></div>
+
+                    <div class="lung-graphic">
+                        <div class="lung left-lung"></div>
+                        <div class="lung right-lung"></div>
+                        <div class="spine"></div>
+                    </div>
+
+                    <div class="scan-label">
+                        <span class="pulse"></span>
+                        AI IMAGE ANALYSIS
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </section>
+
+
+    <!-- ================= QUICK STATS ================= -->
+    <section class="quick-stats">
+        <div class="stats-container">
+
+            <div class="stat">
+                <strong>EfficientNetB0</strong>
+                <span>Deep Learning Model</span>
+            </div>
+
+            <div class="stat">
+                <strong>224 × 224</strong>
+                <span>Input Resolution</span>
+            </div>
+
+            <div class="stat">
+                <strong>2 Classes</strong>
+                <span>Normal / Pneumonia</span>
+            </div>
+
+        </div>
+    </section>
+
+
+    <!-- ================= UPLOAD ================= -->
+    <section class="analysis-section" id="analyze">
+        <div class="section-heading">
+            <span class="section-label">AI ANALYSIS</span>
+            <h2>Upload Chest X-ray</h2>
+            <p>
+                Upload a chest X-ray image to analyze it with the trained
+                EfficientNetB0 model.
+            </p>
+        </div>
+
+        <div class="analysis-container">
+
+            <div class="upload-card">
+
+                <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+
+                    <div class="upload-icon">↑</div>
+
+                    <h3>Drag & Drop your X-ray here</h3>
+
+                    <p>or</p>
+
+                    <button type="button" class="browse-btn"
+                        onclick="event.stopPropagation(); document.getElementById('fileInput').click()">
+                        Browse Image
+                    </button>
+
+                    <span class="file-types">
+                        JPG • JPEG • PNG
+                    </span>
+
+                </div>
+
+                <input type="file" id="fileInput" accept=".jpg,.jpeg,.png,image/jpeg,image/png" hidden>
+
+                <!-- IMAGE PREVIEW -->
+                <div class="preview-container" id="previewContainer">
+
+                    <div class="preview-header">
+                        <span>Selected X-ray</span>
+
+                        <button type="button" class="remove-btn" onclick="removeImage()">
+                            Remove
+                        </button>
+                    </div>
+
+                    <div class="preview-image-wrapper">
+                        <img id="previewImage" alt="Chest X-ray preview">
+                    </div>
+
+                    <div class="file-name" id="fileName"></div>
+
+                    <button class="analyze-btn" id="analyzeBtn" onclick="analyzeXray()">
+                        Analyze X-ray
+                        <span>→</span>
+                    </button>
+
+                </div>
+
+                <!-- LOADING -->
+                <div class="loading-container" id="loadingContainer">
+                    <div class="loader"></div>
+                    <h3>Analyzing X-ray...</h3>
+                    <p>Please wait while the AI processes the image.</p>
+                </div>
+
+            </div>
+
+
+            <!-- RESULT -->
+            <div class="result-card" id="resultCard">
+
+                <div class="result-header">
+                    <span class="section-label">ANALYSIS RESULT</span>
+                    <span class="result-status">Completed</span>
+                </div>
+
+                <div class="prediction-box" id="predictionBox">
+                    <span class="prediction-small">Prediction</span>
+                    <h2 id="prediction">—</h2>
+                    <p>
+                        Confidence:
+                        <strong id="confidence">—</strong>
+                    </p>
+                </div>
+
+                <div class="probabilities">
+
+                    <div class="probability-item">
+                        <div class="probability-top">
+                            <span>Normal</span>
+                            <strong id="normalProbability">—</strong>
+                        </div>
+
+                        <div class="progress">
+                            <div class="progress-fill" id="normalProgress"></div>
+                        </div>
+                    </div>
+
+                    <div class="probability-item">
+                        <div class="probability-top">
+                            <span>Pneumonia</span>
+                            <strong id="pneumoniaProbability">—</strong>
+                        </div>
+
+                        <div class="progress">
+                            <div class="progress-fill" id="pneumoniaProgress"></div>
+                        </div>
+                    </div>
+
+                </div>
+
+                <div class="result-note">
+                    <span>ⓘ</span>
+                    The result is generated by the trained EfficientNetB0
+                    model and is intended for educational and research use.
+                </div>
+
+                <button class="secondary-btn" onclick="resetAnalysis()">
+                    Analyze Another X-ray
+                </button>
+
+            </div>
+
+        </div>
+    </section>
+
+
+    <!-- ================= HOW IT WORKS ================= -->
+    <section class="info-section" id="how-it-works">
+
+        <div class="section-heading">
+            <span class="section-label">PROCESS</span>
+            <h2>How It Works</h2>
+            <p>Three simple steps to analyze a chest X-ray.</p>
+        </div>
+
+        <div class="steps">
+
+            <div class="step-card">
+                <div class="step-number">01</div>
+                <h3>Upload X-ray</h3>
+                <p>
+                    Select a chest X-ray image in JPG, JPEG, or PNG format.
+                </p>
+            </div>
+
+            <div class="step-card">
+                <div class="step-number">02</div>
+                <h3>AI Analysis</h3>
+                <p>
+                    The image is processed and analyzed using EfficientNetB0.
+                </p>
+            </div>
+
+            <div class="step-card">
+                <div class="step-number">03</div>
+                <h3>View Result</h3>
+                <p>
+                    Receive the predicted class and confidence probabilities.
+                </p>
+            </div>
+
+        </div>
+    </section>
+
+
+    <!-- ================= MODEL ================= -->
+    <section class="model-section" id="model">
+
+        <div class="section-heading">
+            <span class="section-label">DEEP LEARNING</span>
+            <h2>Model Information</h2>
+            <p>Technical details of the trained classification model.</p>
+        </div>
+
+        <div class="model-grid">
+
+            <div class="model-item">
+                <span>Model</span>
+                <strong>EfficientNetB0</strong>
+            </div>
+
+            <div class="model-item">
+                <span>Task</span>
+                <strong>Binary Classification</strong>
+            </div>
+
+            <div class="model-item">
+                <span>Classes</span>
+                <strong>Normal / Pneumonia</strong>
+            </div>
+
+            <div class="model-item">
+                <span>Input Size</span>
+                <strong>224 × 224</strong>
+            </div>
+
+            <div class="model-item">
+                <span>Channels</span>
+                <strong>RGB</strong>
+            </div>
+
+            <div class="model-item">
+                <span>Technique</span>
+                <strong>Transfer Learning</strong>
+            </div>
+
+        </div>
+
+    </section>
+
+
+    <!-- ================= PERFORMANCE ================= -->
+    <section class="performance-section" id="performance">
+
+        <div class="section-heading">
+            <span class="section-label">EVALUATION</span>
+            <h2>Model Performance</h2>
+            <p>Results obtained from the evaluation of the trained model.</p>
+        </div>
+
+        <div class="metrics-grid">
+
+            <div class="metric-card">
+                <span>Test Accuracy</span>
+                <strong>95.56%</strong>
+            </div>
+
+            <div class="metric-card">
+                <span>Precision</span>
+                <strong>97.63%</strong>
+            </div>
+
+            <div class="metric-card">
+                <span>Recall</span>
+                <strong>96.26%</strong>
+            </div>
+
+            <div class="metric-card">
+                <span>Specificity</span>
+                <strong>93.67%</strong>
+            </div>
+
+            <div class="metric-card">
+                <span>F1-Score</span>
+                <strong>96.94%</strong>
+            </div>
+
+        </div>
+
+    </section>
+
+
+    <!-- ================= DISCLAIMER ================= -->
+    <section class="disclaimer-section">
+
+        <div class="disclaimer">
+            <div class="disclaimer-icon">!</div>
+
+            <div>
+                <h3>Important Disclaimer</h3>
+                <p>
+                    This application is intended for educational and research
+                    purposes only. It is not a medical diagnostic tool and
+                    should not replace evaluation by a qualified healthcare
+                    professional.
+                </p>
+            </div>
+        </div>
+
+    </section>
+
+
+    <!-- ================= FOOTER ================= -->
+    <footer>
+        <div class="footer-container">
+
+            <div>
+                <strong>Chest X-ray Pneumonia Detection</strong>
+                <p>Powered by EfficientNetB0</p>
+            </div>
+
+            <span>Educational & Research Project</span>
+
+        </div>
+    </footer>
+
+
+    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+
+</body>
+
+</html>
