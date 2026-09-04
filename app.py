@@ -59,6 +59,17 @@ print("Loading EfficientNetB0 model...")
 model = load_model(MODEL_PATH)
 
 print("Model loaded successfully!")
+
+# Warm up model to pre-compile graph during boot, preventing request timeouts
+try:
+    print("Warming up model graph...")
+    dummy_input = np.zeros((1, 224, 224, 3), dtype=np.float32)
+    dummy_input = preprocess_input(dummy_input)
+    model.predict(dummy_input, verbose=0)
+    print("Model warmup complete!")
+except Exception as e:
+    print("Warmup notice:", e)
+
 print("=" * 60)
 
 
